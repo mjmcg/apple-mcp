@@ -84,11 +84,14 @@ async function getEvents(
     );
 
     const events: CalendarEvent[] = [];
-    for (const r of results) {
+    for (let i = 0; i < results.length; i++) {
+        const r = results[i];
         if (r.status === "fulfilled") {
-            // accli returns {"events": [...]} directly
             const list: any[] = r.value?.events ?? [];
+            console.error(`Calendar "${calNames[i]}": ${list.length} events`);
             events.push(...list.map(mapEvent));
+        } else {
+            console.error(`Calendar "${calNames[i]}" query failed: ${r.reason}`);
         }
     }
 
