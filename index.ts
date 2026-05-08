@@ -173,6 +173,11 @@ async function attemptEagerLoading() {
 // Startup: HTTP mode if MCP_HTTP_PORT is set, otherwise stdio mode.
 const _httpPort = process.env.MCP_HTTP_PORT ? parseInt(process.env.MCP_HTTP_PORT, 10) : null;
 if (_httpPort) {
+	// Cancel the safe-mode fallback timeout — it only applies to stdio mode.
+	if (loadingTimeout) {
+		clearTimeout(loadingTimeout);
+		loadingTimeout = null;
+	}
 	startHttpServer(_httpPort).catch((err) => {
 		console.error("Failed to start HTTP server:", err);
 		process.exit(1);
