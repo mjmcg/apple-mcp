@@ -90,7 +90,6 @@ async function getEvents(
         const r = results[i];
         if (r.status === "fulfilled") {
             const list: any[] = r.value?.events ?? [];
-            console.error(`Calendar "${calNames[i]}": ${list.length} events`);
             events.push(...list.map(mapEvent));
         } else {
             console.error(`Calendar "${calNames[i]}" query failed: ${r.reason}`);
