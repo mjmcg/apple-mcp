@@ -30,7 +30,7 @@ async function runAccli(...args: string[]): Promise<any> {
         stdout = err.stdout ?? "";
         stderr = err.stderr ?? "";
         if (!stdout) {
-            throw new Error(stderr.trim() || err.message || `accli exited with error`);
+            throw new Error(stderr.trim() || err.message || "accli exited with error");
         }
     }
 
@@ -39,16 +39,7 @@ async function runAccli(...args: string[]): Promise<any> {
         throw new Error(`accli produced no output${stderr.trim() ? `: ${stderr.trim()}` : ""}`);
     }
 
-    console.error(`accli [${args.join(" ")}] stdout: ${trimmed.slice(0, 200)}`);
-
-    const parsed = JSON.parse(trimmed);
-    if (!parsed.ok) {
-        throw new Error(
-            parsed.error?.message ||
-            (parsed.error ? JSON.stringify(parsed.error) : "accli returned ok:false with no message")
-        );
-    }
-    return parsed.data;
+    return JSON.parse(trimmed);
 }
 
 function mapEvent(e: any): CalendarEvent {
@@ -67,7 +58,8 @@ function mapEvent(e: any): CalendarEvent {
 
 async function getCalendarNames(): Promise<string[]> {
     const data = await runAccli("calendars");
-    const list: any[] = Array.isArray(data) ? data : (data?.calendars ?? []);
+    // accli returns {"calendars": [...]} directly
+    const list: any[] = data?.calendars ?? [];
     return list.map((c: any) => c.name).filter(Boolean);
 }
 
@@ -94,7 +86,8 @@ async function getEvents(
     const events: CalendarEvent[] = [];
     for (const r of results) {
         if (r.status === "fulfilled") {
-            const list: any[] = Array.isArray(r.value) ? r.value : (r.value?.events ?? []);
+            // accli returns {"events": [...]} directly
+            const list: any[] = r.value?.events ?? [];
             events.push(...list.map(mapEvent));
         }
     }
@@ -128,7 +121,7 @@ async function searchEvents(
     const events: CalendarEvent[] = [];
     for (const r of results) {
         if (r.status === "fulfilled") {
-            const list: any[] = Array.isArray(r.value) ? r.value : (r.value?.events ?? []);
+            const list: any[] = r.value?.events ?? [];
             events.push(...list.map(mapEvent));
         }
     }
