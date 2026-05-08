@@ -848,9 +848,8 @@ end tell`;
 						const { operation } = args;
 
 						if (operation === "list") {
-							// List all reminders
 							const lists = await remindersModule.getAllLists();
-							const allReminders = await remindersModule.getAllReminders();
+							const allReminders = await remindersModule.getAllReminders(args.listName);
 							return {
 								content: [
 									{
@@ -863,11 +862,8 @@ end tell`;
 								isError: false,
 							};
 						} else if (operation === "search") {
-							// Search for reminders
 							const { searchText } = args;
-							const results = await remindersModule.searchReminders(
-								searchText!,
-							);
+							const results = await remindersModule.searchReminders(searchText!);
 							return {
 								content: [
 									{
@@ -882,15 +878,16 @@ end tell`;
 								isError: false,
 							};
 						} else if (operation === "open") {
-							// Open a reminder
 							const { searchText } = args;
-							const result = await remindersModule.openReminder(searchText!);
+							const result = await remindersModule.openReminder(searchText ?? "");
 							return {
 								content: [
 									{
 										type: "text",
 										text: result.success
-											? `Opened Reminders app. Found reminder: ${result.reminder?.name}`
+											? result.reminder
+												? `Opened Reminders app. Found reminder: ${result.reminder.name}`
+												: result.message
 											: result.message,
 									},
 								],
@@ -898,7 +895,6 @@ end tell`;
 								isError: !result.success,
 							};
 						} else if (operation === "create") {
-							// Create a reminder
 							const { name, listName, notes, dueDate } = args;
 							const result = await remindersModule.createReminder(
 								name!,
@@ -910,42 +906,33 @@ end tell`;
 								content: [
 									{
 										type: "text",
-										text: `Created reminder "${result.name}" ${listName ? `in list "${listName}"` : ""}.`,
+										text: `Created reminder "${result.name}"${listName ? ` in list "${listName}"` : ""}.`,
 									},
 								],
 								success: true,
 								reminder: result,
 								isError: false,
 							};
-						} else if (operation === "listById") {
-							// Get reminders from a specific list by ID
-							const { listId, props } = args;
-							const results = await remindersModule.getRemindersFromListById(
-								listId!,
-								props,
-							);
+						} else if (operation === "complete") {
+							const { reminderId } = args;
+							const result = await remindersModule.completeReminder(reminderId!);
 							return {
-								content: [
-									{
-										type: "text",
-										text:
-											results.length > 0
-												? `Found ${results.length} reminders in list with ID "${listId}".`
-												: `No reminders found in list with ID "${listId}".`,
-									},
-								],
-								reminders: results,
-								isError: false,
+								content: [{ type: "text", text: result.message }],
+								...result,
+								isError: !result.success,
+							};
+						} else if (operation === "delete") {
+							const { reminderId } = args;
+							const result = await remindersModule.deleteReminder(reminderId!);
+							return {
+								content: [{ type: "text", text: result.message }],
+								...result,
+								isError: !result.success,
 							};
 						}
 
 						return {
-							content: [
-								{
-									type: "text",
-									text: "Unknown operation",
-								},
-							],
+							content: [{ type: "text", text: "Unknown operation" }],
 							isError: true,
 						};
 					} catch (error) {
@@ -955,7 +942,7 @@ end tell`;
 							content: [
 								{
 									type: "text",
-									text: errorMessage.includes("access") ? errorMessage : `Error in reminders tool: ${errorMessage}`,
+									text: `Error in reminders tool: ${errorMessage}`,
 								},
 							],
 							isError: true,
@@ -1570,12 +1557,11 @@ function isMailArgs(args: unknown): args is {
 }
 
 function isRemindersArgs(args: unknown): args is {
-	operation: "list" | "search" | "open" | "create" | "listById";
+	operation: "list" | "search" | "open" | "create" | "complete" | "delete";
 	searchText?: string;
 	name?: string;
 	listName?: string;
-	listId?: string;
-	props?: string[];
+	reminderId?: string;
 	notes?: string;
 	dueDate?: string;
 } {
@@ -1588,20 +1574,17 @@ function isRemindersArgs(args: unknown): args is {
 		return false;
 	}
 
-	if (!["list", "search", "open", "create", "listById"].includes(operation)) {
+	if (!["list", "search", "open", "create", "complete", "delete"].includes(operation)) {
 		return false;
 	}
 
-	// For search and open operations, searchText is required
 	if (
-		(operation === "search" || operation === "open") &&
-		(typeof (args as any).searchText !== "string" ||
-			(args as any).searchText === "")
+		operation === "search" &&
+		(typeof (args as any).searchText !== "string" || (args as any).searchText === "")
 	) {
 		return false;
 	}
 
-	// For create operation, name is required
 	if (
 		operation === "create" &&
 		(typeof (args as any).name !== "string" || (args as any).name === "")
@@ -1609,10 +1592,9 @@ function isRemindersArgs(args: unknown): args is {
 		return false;
 	}
 
-	// For listById operation, listId is required
 	if (
-		operation === "listById" &&
-		(typeof (args as any).listId !== "string" || (args as any).listId === "")
+		(operation === "complete" || operation === "delete") &&
+		(typeof (args as any).reminderId !== "string" || (args as any).reminderId === "")
 	) {
 		return false;
 	}
