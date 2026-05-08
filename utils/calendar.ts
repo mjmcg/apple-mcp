@@ -68,6 +68,8 @@ async function getEvents(
     fromDate?: string,
     toDate?: string,
 ): Promise<CalendarEvent[]> {
+    const effectiveLimit = limit > 0 ? limit : 10;
+
     const today = new Date();
     const defaultEnd = new Date();
     defaultEnd.setDate(today.getDate() + 7);
@@ -79,7 +81,7 @@ async function getEvents(
 
     const results = await Promise.allSettled(
         calNames.map((name) =>
-            runAccli("events", name, "--from", from, "--to", to, "--max", String(limit))
+            runAccli("events", name, "--from", from, "--to", to, "--max", String(effectiveLimit))
         )
     );
 
@@ -97,7 +99,7 @@ async function getEvents(
 
     return events
         .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""))
-        .slice(0, limit);
+        .slice(0, effectiveLimit);
 }
 
 async function searchEvents(
@@ -106,6 +108,8 @@ async function searchEvents(
     fromDate?: string,
     toDate?: string,
 ): Promise<CalendarEvent[]> {
+    const effectiveLimit = limit > 0 ? limit : 10;
+
     const today = new Date();
     const defaultEnd = new Date();
     defaultEnd.setDate(today.getDate() + 30);
@@ -117,7 +121,7 @@ async function searchEvents(
 
     const results = await Promise.allSettled(
         calNames.map((name) =>
-            runAccli("events", name, "--from", from, "--to", to, "--query", searchText, "--max", String(limit))
+            runAccli("events", name, "--from", from, "--to", to, "--query", searchText, "--max", String(effectiveLimit))
         )
     );
 
@@ -131,7 +135,7 @@ async function searchEvents(
 
     return events
         .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""))
-        .slice(0, limit);
+        .slice(0, effectiveLimit);
 }
 
 async function createEvent(
