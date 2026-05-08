@@ -1355,7 +1355,29 @@ async function startHttpServer(port: number) {
 		loadModule("maps"),
 	]);
 
+	const allowedIp = process.env.MCP_ALLOWED_IP ?? null;
+	const authToken = process.env.MCP_AUTH_TOKEN ?? null;
+
 	const httpServer = createHttpServer(async (req, res) => {
+		// IP allowlist — strip IPv6-mapped IPv4 prefix (::ffff:x.x.x.x)
+		if (allowedIp) {
+			const remote = (req.socket.remoteAddress ?? "").replace(/^::ffff:/, "");
+			if (remote !== allowedIp) {
+				console.error(`Rejected connection from ${remote}`);
+				res.writeHead(403).end();
+				return;
+			}
+		}
+
+		// Bearer token auth
+		if (authToken) {
+			const auth = req.headers["authorization"] ?? "";
+			if (auth !== `Bearer ${authToken}`) {
+				res.writeHead(401, { "WWW-Authenticate": "Bearer" }).end();
+				return;
+			}
+		}
+
 		if (req.url !== "/mcp") {
 			res.writeHead(404).end();
 			return;
