@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
 	CallToolRequestSchema,
 	ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { createServer as createHttpServer } from "node:http";
 import { runAppleScript } from "run-applescript";
 import tools from "./tools";
 
@@ -168,19 +170,24 @@ async function attemptEagerLoading() {
 	}
 }
 
-// Attempt eager loading first
-attemptEagerLoading();
+// Startup: HTTP mode if MCP_HTTP_PORT is set, otherwise stdio mode.
+const _httpPort = process.env.MCP_HTTP_PORT ? parseInt(process.env.MCP_HTTP_PORT, 10) : null;
+if (_httpPort) {
+	startHttpServer(_httpPort).catch((err) => {
+		console.error("Failed to start HTTP server:", err);
+		process.exit(1);
+	});
+} else {
+	attemptEagerLoading();
+}
 
-// Main server object
+// Main server object (used only in stdio mode)
 let server: Server;
 
-// Initialize the server and set up handlers
-function initServer() {
-	console.error(
-		`Initializing server in ${safeModeFallback ? "safe" : "standard"} mode...`,
-	);
-
-	server = new Server(
+// Creates and configures an MCP Server instance without connecting a transport.
+// Call this for each new connection in HTTP mode, or once for stdio mode.
+function createMcpServer(): Server {
+	const s = new Server(
 		{
 			name: "Apple MCP tools",
 			version: "1.0.0",
@@ -192,11 +199,11 @@ function initServer() {
 		},
 	);
 
-	server.setRequestHandler(ListToolsRequestSchema, async () => ({
+	s.setRequestHandler(ListToolsRequestSchema, async () => ({
 		tools,
 	}));
 
-	server.setRequestHandler(CallToolRequestSchema, async (request) => {
+	s.setRequestHandler(CallToolRequestSchema, async (request) => {
 		try {
 			const { name, arguments: args } = request.params;
 
@@ -1296,8 +1303,16 @@ end tell`;
 		}
 	});
 
-	// Start the server transport
-	console.error("Setting up MCP server transport...");
+	return s;
+}
+
+// Initialize the server in stdio mode and connect a stdio transport.
+function initServer() {
+	console.error(
+		`Initializing server in ${safeModeFallback ? "safe" : "standard"} mode...`,
+	);
+
+	server = createMcpServer();
 
 	(async () => {
 		try {
@@ -1305,18 +1320,14 @@ end tell`;
 			const transport = new StdioServerTransport();
 
 			// Ensure stdout is only used for JSON messages
-			console.error("Setting up stdout filter...");
 			const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 			process.stdout.write = (chunk: any, encoding?: any, callback?: any) => {
-				// Only allow JSON messages to pass through
 				if (typeof chunk === "string" && !chunk.startsWith("{")) {
-					console.error("Filtering non-JSON stdout message");
-					return true; // Silently skip non-JSON messages
+					return true;
 				}
 				return originalStdoutWrite(chunk, encoding, callback);
 			};
 
-			console.error("Connecting transport to server...");
 			await server.connect(transport);
 			console.error("Server connected successfully!");
 		} catch (error) {
@@ -1324,6 +1335,43 @@ end tell`;
 			process.exit(1);
 		}
 	})();
+}
+
+// Start an HTTP server on the given port. Each POST /mcp request gets its own
+// Server+Transport instance (stateless mode — no session management needed).
+async function startHttpServer(port: number) {
+	await Promise.allSettled([
+		loadModule("contacts"),
+		loadModule("notes"),
+		loadModule("message"),
+		loadModule("mail"),
+		loadModule("reminders"),
+		loadModule("calendar"),
+		loadModule("maps"),
+	]);
+
+	const httpServer = createHttpServer(async (req, res) => {
+		if (req.url !== "/mcp") {
+			res.writeHead(404).end();
+			return;
+		}
+		if (req.method !== "POST") {
+			res.writeHead(405, { Allow: "POST" }).end();
+			return;
+		}
+
+		const transport = new StreamableHTTPServerTransport({
+			sessionIdGenerator: undefined,
+		});
+		const mcpServer = createMcpServer();
+		await mcpServer.connect(transport);
+		await transport.handleRequest(req, res);
+		res.on("close", () => { mcpServer.close().catch(() => {}); });
+	});
+
+	httpServer.listen(port, () => {
+		console.error(`Apple MCP HTTP server listening on port ${port}`);
+	});
 }
 
 // Helper functions for argument type checking
