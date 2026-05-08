@@ -20,12 +20,33 @@ interface CalendarEvent {
 }
 
 async function runAccli(...args: string[]): Promise<any> {
-    const { stdout } = await execFileAsync(ACCLI, [...args, "--json"], {
-        timeout: 15000,
-    });
-    const parsed = JSON.parse(stdout.trim());
+    let stdout = "";
+    let stderr = "";
+    try {
+        const result = await execFileAsync(ACCLI, [...args, "--json"], { timeout: 15000 });
+        stdout = result.stdout;
+        stderr = result.stderr;
+    } catch (err: any) {
+        stdout = err.stdout ?? "";
+        stderr = err.stderr ?? "";
+        if (!stdout) {
+            throw new Error(stderr.trim() || err.message || `accli exited with error`);
+        }
+    }
+
+    const trimmed = stdout.trim();
+    if (!trimmed) {
+        throw new Error(`accli produced no output${stderr.trim() ? `: ${stderr.trim()}` : ""}`);
+    }
+
+    console.error(`accli [${args.join(" ")}] stdout: ${trimmed.slice(0, 200)}`);
+
+    const parsed = JSON.parse(trimmed);
     if (!parsed.ok) {
-        throw new Error(parsed.error?.message ?? JSON.stringify(parsed.error));
+        throw new Error(
+            parsed.error?.message ||
+            (parsed.error ? JSON.stringify(parsed.error) : "accli returned ok:false with no message")
+        );
     }
     return parsed.data;
 }
