@@ -7,6 +7,13 @@ const execFileAsync = promisify(execFile);
 // Set ACCLI_PATH in the LaunchAgent EnvironmentVariables if needed.
 const ACCLI = process.env.ACCLI_PATH ?? "accli";
 
+interface CalendarInfo {
+    name: string;
+    source: string;
+    id: string;
+    writable: boolean;
+}
+
 interface CalendarEvent {
     id: string;
     title: string;
@@ -56,11 +63,20 @@ function mapEvent(e: any): CalendarEvent {
     };
 }
 
-async function getCalendarNames(): Promise<string[]> {
+async function listCalendars(): Promise<CalendarInfo[]> {
     const data = await runAccli("calendars");
-    // accli returns {"calendars": [...]} directly
     const list: any[] = data?.calendars ?? [];
-    return list.map((c: any) => c.name).filter(Boolean);
+    return list.map((c: any) => ({
+        name: c.name ?? "",
+        source: c.source ?? "",
+        id: c.id ?? "",
+        writable: c.writable ?? false,
+    }));
+}
+
+async function getCalendarNames(): Promise<string[]> {
+    const calendars = await listCalendars();
+    return calendars.map((c) => c.name).filter(Boolean);
 }
 
 async function getEvents(
@@ -173,16 +189,100 @@ async function createEvent(
     }
 }
 
-async function openEvent(eventId: string): Promise<{ success: boolean; message: string }> {
+async function getEvent(
+    eventId: string,
+    calendarName?: string,
+): Promise<CalendarEvent> {
+    if (calendarName) {
+        const data = await runAccli("event", calendarName, eventId);
+        return mapEvent(data?.event ?? data);
+    }
+
+    // No calendar specified — try each calendar until found
+    const calNames = await getCalendarNames();
+    for (const name of calNames) {
+        try {
+            const data = await runAccli("event", name, eventId);
+            return mapEvent(data?.event ?? data);
+        } catch {
+            // event not in this calendar, try next
+        }
+    }
+    throw new Error(`Event with ID "${eventId}" not found in any calendar`);
+}
+
+async function updateEvent(
+    eventId: string,
+    calendarName: string,
+    title?: string,
+    startDate?: string,
+    endDate?: string,
+    location?: string,
+    notes?: string,
+    isAllDay?: boolean,
+): Promise<{ success: boolean; message: string }> {
     try {
-        execFile("open", ["-a", "Calendar"]);
-        return { success: true, message: "Calendar app opened." };
+        const args = ["update", calendarName, eventId];
+        if (title) args.push("--summary", title);
+        if (startDate) args.push("--start", startDate.slice(0, 16));
+        if (endDate) args.push("--end", endDate.slice(0, 16));
+        if (location) args.push("--location", location);
+        if (notes) args.push("--description", notes);
+        if (isAllDay === true) args.push("--all-day");
+        if (isAllDay === false) args.push("--no-all-day");
+
+        await runAccli(...args);
+        return { success: true, message: `Event "${eventId}" updated successfully.` };
     } catch (error) {
         return {
             success: false,
-            message: `Error opening Calendar: ${error instanceof Error ? error.message : String(error)}`,
+            message: `Error updating event: ${error instanceof Error ? error.message : String(error)}`,
         };
     }
+}
+
+async function deleteEvent(
+    eventId: string,
+    calendarName: string,
+): Promise<{ success: boolean; message: string }> {
+    try {
+        await runAccli("delete", calendarName, eventId);
+        return { success: true, message: `Event "${eventId}" deleted successfully.` };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Error deleting event: ${error instanceof Error ? error.message : String(error)}`,
+        };
+    }
+}
+
+interface BusySlot {
+    start: string;
+    end: string;
+    calendar: string;
+}
+
+async function getFreeBusy(
+    fromDate: string,
+    toDate: string,
+    calendarNames?: string[],
+): Promise<BusySlot[]> {
+    const from = fromDate.slice(0, 16);
+    const to = toDate.slice(0, 16);
+
+    const names = calendarNames?.length ? calendarNames : await getCalendarNames();
+    const args = ["freebusy", "--from", from, "--to", to];
+    for (const name of names) {
+        args.push("--calendar", name);
+    }
+
+    const data = await runAccli(...args);
+    const slots: any[] = data?.busy ?? data?.slots ?? [];
+    return slots.map((s: any) => ({
+        start: s.start ? new Date(s.start).toISOString() : "",
+        end: s.end ? new Date(s.end).toISOString() : "",
+        calendar: s.calendar ?? "",
+    }));
 }
 
 async function requestCalendarAccess(): Promise<{ hasAccess: boolean; message: string }> {
@@ -198,9 +298,13 @@ async function requestCalendarAccess(): Promise<{ hasAccess: boolean; message: s
 }
 
 export default {
+    listCalendars,
     getEvents,
+    getEvent,
+    updateEvent,
+    deleteEvent,
+    getFreeBusy,
     searchEvents,
     createEvent,
-    openEvent,
     requestCalendarAccess,
 };

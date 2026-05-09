@@ -173,14 +173,14 @@ const CONTACTS_TOOL: Tool = {
   
 const CALENDAR_TOOL: Tool = {
   name: "calendar",
-  description: "Search, create, and open calendar events in Apple Calendar app",
+  description: "Search, create, and open calendar events in Apple Calendar app, and list available calendars",
   inputSchema: {
     type: "object",
     properties: {
       operation: {
         type: "string",
-        description: "Operation to perform: 'search', 'open', 'list', or 'create'",
-        enum: ["search", "open", "list", "create"]
+        description: "Operation to perform: 'search', 'get', 'list', 'create', 'update', 'delete', 'freebusy', or 'calendars'",
+        enum: ["search", "get", "list", "create", "update", "delete", "freebusy", "calendars"]
       },
       searchText: {
         type: "string",
@@ -188,7 +188,7 @@ const CALENDAR_TOOL: Tool = {
       },
       eventId: {
         type: "string",
-        description: "ID of the event to open (required for open operation)"
+        description: "ID of the event (required for get and update operations)"
       },
       limit: {
         type: "number",
@@ -204,32 +204,35 @@ const CALENDAR_TOOL: Tool = {
       },
       title: {
         type: "string",
-        description: "Title of the event to create (required for create operation)"
+        description: "Title of the event (required for create, optional for update)"
       },
       startDate: {
         type: "string",
-        description: "Start date/time of the event in ISO format (required for create operation)"
+        description: "Start date/time of the event in ISO format (required for create, optional for update)"
       },
       endDate: {
         type: "string",
-        description: "End date/time of the event in ISO format (required for create operation)"
+        description: "End date/time of the event in ISO format (required for create, optional for update)"
       },
       location: {
         type: "string",
-        description: "Location of the event (optional for create operation)"
+        description: "Location of the event (optional for create and update)"
       },
       notes: {
         type: "string",
-        description: "Additional notes for the event (optional for create operation)"
+        description: "Additional notes for the event (optional for create and update)"
       },
       isAllDay: {
         type: "boolean",
-        description: "Whether the event is an all-day event (optional for create operation, default is false)"
+        description: "Whether the event is an all-day event (optional for create and update)"
       },
       calendarName: {
         type: "string",
-        description: "Name of the calendar to create the event in (optional for create operation, uses default calendar if not specified)"
-      }
+        description: "Name of the calendar (optional for create/get, required for update)"      },
+      calendarNames: {
+        type: "array",
+        items: { type: "string" },
+        description: "List of calendar names to check (optional for freebusy, defaults to all calendars)"      }
     },
     required: ["operation"]
   }

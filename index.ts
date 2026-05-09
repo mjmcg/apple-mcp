@@ -993,20 +993,46 @@ end tell`;
 								};
 							}
 
-							case "open": {
-								const { eventId } = args;
-								const result = await calendarModule.openEvent(eventId!);
+							case "get": {
+								const { eventId, calendarName } = args;
+								const event = await calendarModule.getEvent(eventId!, calendarName);
 
 								return {
 									content: [
 										{
 											type: "text",
-											text: result.success
-												? result.message
-												: `Error opening event: ${result.message}`,
+											text: `${event.title} (${new Date(event.startDate!).toLocaleString()} - ${new Date(event.endDate!).toLocaleString()})\n` +
+												`Location: ${event.location || "Not specified"}\n` +
+												`Calendar: ${event.calendarName}\n` +
+												`All Day: ${event.isAllDay ? "yes" : "no"}\n` +
+												`ID: ${event.id}` +
+												(event.notes ? `\nNotes: ${event.notes}` : "") +
+												(event.url ? `\nURL: ${event.url}` : ""),
 										},
 									],
-									isError: !result.success,
+									isError: false,
+								};
+							}
+
+							case "calendars": {
+								const calendars = await calendarModule.listCalendars();
+
+								return {
+									content: [
+										{
+											type: "text",
+											text:
+												calendars.length > 0
+													? `Found ${calendars.length} calendars:\n\n${calendars
+															.map(
+																(cal) =>
+																	`${cal.name}\n  Source: ${cal.source}\n  ID: ${cal.id}\n  Writable: ${cal.writable ? "yes" : "no"}`,
+															)
+															.join("\n\n")}`
+													: "No calendars found.",
+										},
+									],
+									isError: false,
 								};
 							}
 
@@ -1076,6 +1102,90 @@ end tell`;
 										},
 									],
 									isError: !result.success,
+								};
+							}
+
+							case "update": {
+								const {
+									eventId,
+									calendarName,
+									title,
+									startDate,
+									endDate,
+									location,
+									notes,
+									isAllDay,
+								} = args;
+								const result = await calendarModule.updateEvent(
+									eventId!,
+									calendarName!,
+									title,
+									startDate,
+									endDate,
+									location,
+									notes,
+									isAllDay,
+								);
+								return {
+									content: [
+										{
+											type: "text",
+											text: result.success
+												? result.message
+												: `Error updating event: ${result.message}`,
+										},
+									],
+									isError: !result.success,
+								};
+							}
+
+							case "delete": {
+								const { eventId, calendarName } = args;
+								const result = await calendarModule.deleteEvent(
+									eventId!,
+									calendarName!,
+								);
+								return {
+									content: [
+										{
+											type: "text",
+											text: result.success
+												? result.message
+												: `Error deleting event: ${result.message}`,
+										},
+									],
+									isError: !result.success,
+								};
+							}
+
+							case "freebusy": {
+								const { fromDate, toDate, calendarNames } = args;
+								if (!fromDate || !toDate) {
+									throw new Error("fromDate and toDate are required for freebusy operation");
+								}
+								const slots = await calendarModule.getFreeBusy(
+									fromDate,
+									toDate,
+									calendarNames,
+								);
+
+								return {
+									content: [
+										{
+											type: "text",
+											text:
+												slots.length > 0
+													? `Found ${slots.length} busy slots:\n\n${slots
+															.map(
+																(slot) =>
+																	`${new Date(slot.start).toLocaleString()} - ${new Date(slot.end).toLocaleString()}` +
+																	(slot.calendar ? ` (${slot.calendar})` : ""),
+															)
+															.join("\n")}`
+													: `No busy slots found in the specified range.`,
+										},
+									],
+									isError: false,
 								};
 							}
 
@@ -1604,7 +1714,7 @@ function isRemindersArgs(args: unknown): args is {
 
 
 function isCalendarArgs(args: unknown): args is {
-	operation: "search" | "open" | "list" | "create";
+	operation: "search" | "get" | "list" | "create" | "update" | "delete" | "freebusy" | "calendars";
 	searchText?: string;
 	eventId?: string;
 	limit?: number;
@@ -1617,6 +1727,7 @@ function isCalendarArgs(args: unknown): args is {
 	notes?: string;
 	isAllDay?: boolean;
 	calendarName?: string;
+	calendarNames?: string[];
 } {
 	if (typeof args !== "object" || args === null) {
 		return false;
@@ -1627,7 +1738,7 @@ function isCalendarArgs(args: unknown): args is {
 		return false;
 	}
 
-	if (!["search", "open", "list", "create"].includes(operation)) {
+	if (!["search", "get", "list", "create", "update", "delete", "freebusy", "calendars"].includes(operation)) {
 		return false;
 	}
 
@@ -1639,9 +1750,30 @@ function isCalendarArgs(args: unknown): args is {
 		}
 	}
 
-	if (operation === "open") {
+	if (operation === "get") {
 		const { eventId } = args as { eventId?: unknown };
 		if (typeof eventId !== "string") {
+			return false;
+		}
+	}
+
+	if (operation === "update") {
+		const { eventId, calendarName } = args as { eventId?: unknown; calendarName?: unknown };
+		if (typeof eventId !== "string" || typeof calendarName !== "string") {
+			return false;
+		}
+	}
+
+	if (operation === "delete") {
+		const { eventId, calendarName } = args as { eventId?: unknown; calendarName?: unknown };
+		if (typeof eventId !== "string" || typeof calendarName !== "string") {
+			return false;
+		}
+	}
+
+	if (operation === "freebusy") {
+		const { fromDate, toDate } = args as { fromDate?: unknown; toDate?: unknown };
+		if (typeof fromDate !== "string" || typeof toDate !== "string") {
 			return false;
 		}
 	}
