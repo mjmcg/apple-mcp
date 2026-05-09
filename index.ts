@@ -837,116 +837,155 @@ end tell`;
 					}
 				}
 
-				case "reminders": {
-					if (!isRemindersArgs(args)) {
-						throw new Error("Invalid arguments for reminders tool");
-					}
-
+				case "reminders_list": {
 					try {
 						const remindersModule = await loadModule("reminders");
-
-						const { operation } = args;
-
-						if (operation === "list") {
-							const lists = await remindersModule.getAllLists();
-							const allReminders = await remindersModule.getAllReminders(args.listName);
-							return {
-								content: [
-									{
-										type: "text",
-										text: `Found ${lists.length} lists and ${allReminders.length} reminders.`,
-									},
-								],
-								lists,
-								reminders: allReminders,
-								isError: false,
-							};
-						} else if (operation === "search") {
-							const { searchText } = args;
-							const results = await remindersModule.searchReminders(searchText!);
-							return {
-								content: [
-									{
-										type: "text",
-										text:
-											results.length > 0
-												? `Found ${results.length} reminders matching "${searchText}".`
-												: `No reminders found matching "${searchText}".`,
-									},
-								],
-								reminders: results,
-								isError: false,
-							};
-						} else if (operation === "open") {
-							const { searchText } = args;
-							const result = await remindersModule.openReminder(searchText ?? "");
-							return {
-								content: [
-									{
-										type: "text",
-										text: result.success
-											? result.reminder
-												? `Opened Reminders app. Found reminder: ${result.reminder.name}`
-												: result.message
-											: result.message,
-									},
-								],
-								...result,
-								isError: !result.success,
-							};
-						} else if (operation === "create") {
-							const { name, listName, notes, dueDate } = args;
-							const result = await remindersModule.createReminder(
-								name!,
-								listName,
-								notes,
-								dueDate,
-							);
-							return {
-								content: [
-									{
-										type: "text",
-										text: `Created reminder "${result.name}"${listName ? ` in list "${listName}"` : ""}.`,
-									},
-								],
-								success: true,
-								reminder: result,
-								isError: false,
-							};
-						} else if (operation === "complete") {
-							const { reminderId } = args;
-							const result = await remindersModule.completeReminder(reminderId!);
-							return {
-								content: [{ type: "text", text: result.message }],
-								...result,
-								isError: !result.success,
-							};
-						} else if (operation === "delete") {
-							const { reminderId } = args;
-							const result = await remindersModule.deleteReminder(reminderId!);
-							return {
-								content: [{ type: "text", text: result.message }],
-								...result,
-								isError: !result.success,
-							};
-						}
-
+						const { filter, listName } = args as { filter?: string; listName?: string };
+						const reminders = await remindersModule.showReminders(filter ?? "all", listName);
 						return {
-							content: [{ type: "text", text: "Unknown operation" }],
-							isError: true,
+							content: [{
+								type: "text",
+								text: reminders.length > 0
+									? `Found ${reminders.length} reminder(s):\n\n${reminders.map((r) =>
+										`${r.title}${r.dueDate ? ` (due ${new Date(r.dueDate).toLocaleString()})` : ""}\n` +
+										`List: ${r.listName} | Priority: ${r.priority} | ID: ${r.id}` +
+										(r.notes ? `\nNotes: ${r.notes}` : "")
+									).join("\n\n")}`
+									: `No reminders found.`,
+							}],
+							reminders,
+							isError: false,
 						};
 					} catch (error) {
-						console.error("Error in reminders tool:", error);
 						const errorMessage = error instanceof Error ? error.message : String(error);
+						return { content: [{ type: "text", text: `Error listing reminders: ${errorMessage}` }], isError: true };
+					}
+				}
+
+				case "reminders_search": {
+					try {
+						const remindersModule = await loadModule("reminders");
+						const { searchText } = args as { searchText: string };
+						if (typeof searchText !== "string" || !searchText) throw new Error("searchText is required");
+						const reminders = await remindersModule.searchReminders(searchText);
 						return {
-							content: [
-								{
-									type: "text",
-									text: `Error in reminders tool: ${errorMessage}`,
-								},
-							],
-							isError: true,
+							content: [{
+								type: "text",
+								text: reminders.length > 0
+									? `Found ${reminders.length} reminder(s) matching "${searchText}":\n\n${reminders.map((r) =>
+										`${r.title}${r.dueDate ? ` (due ${new Date(r.dueDate).toLocaleString()})` : ""}\n` +
+										`List: ${r.listName} | Priority: ${r.priority} | ID: ${r.id}` +
+										(r.notes ? `\nNotes: ${r.notes}` : "")
+									).join("\n\n")}`
+									: `No reminders found matching "${searchText}".`,
+							}],
+							reminders,
+							isError: false,
 						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return { content: [{ type: "text", text: `Error searching reminders: ${errorMessage}` }], isError: true };
+					}
+				}
+
+				case "reminders_get_lists": {
+					try {
+						const remindersModule = await loadModule("reminders");
+						const lists = await remindersModule.getLists();
+						return {
+							content: [{
+								type: "text",
+								text: lists.length > 0
+									? `Found ${lists.length} reminder list(s):\n\n${lists.map((l) =>
+										`${l.title} — ${l.reminderCount} reminder(s), ${l.overdueCount} overdue | ID: ${l.id}`
+									).join("\n")}`
+									: "No reminder lists found.",
+							}],
+							lists,
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return { content: [{ type: "text", text: `Error getting reminder lists: ${errorMessage}` }], isError: true };
+					}
+				}
+
+				case "reminders_create": {
+					try {
+						const remindersModule = await loadModule("reminders");
+						const { title, listName, notes, dueDate, priority } = args as {
+							title: string; listName?: string; notes?: string; dueDate?: string;
+							priority?: "none" | "low" | "medium" | "high";
+						};
+						if (typeof title !== "string" || !title) throw new Error("title is required");
+						const reminder = await remindersModule.createReminder(title, listName, notes, dueDate, priority);
+						return {
+							content: [{
+								type: "text",
+								text: `Created reminder "${reminder.title}" in list "${reminder.listName}".` +
+									(reminder.dueDate ? ` Due: ${new Date(reminder.dueDate).toLocaleString()}` : "") +
+									`\nID: ${reminder.id}`,
+							}],
+							reminder,
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return { content: [{ type: "text", text: `Error creating reminder: ${errorMessage}` }], isError: true };
+					}
+				}
+
+				case "reminders_edit": {
+					try {
+						const remindersModule = await loadModule("reminders");
+						const { reminderId, title, listName, notes, dueDate, priority, clearDue } = args as {
+							reminderId: string; title?: string; listName?: string; notes?: string;
+							dueDate?: string; priority?: "none" | "low" | "medium" | "high"; clearDue?: boolean;
+						};
+						if (typeof reminderId !== "string" || !reminderId) throw new Error("reminderId is required");
+						const reminder = await remindersModule.editReminder(reminderId, { title, listName, notes, dueDate, priority, clearDue });
+						return {
+							content: [{ type: "text", text: `Updated reminder "${reminder.title}" (ID: ${reminder.id}).` }],
+							reminder,
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return { content: [{ type: "text", text: `Error editing reminder: ${errorMessage}` }], isError: true };
+					}
+				}
+
+				case "reminders_complete": {
+					try {
+						const remindersModule = await loadModule("reminders");
+						const { reminderId } = args as { reminderId: string };
+						if (typeof reminderId !== "string" || !reminderId) throw new Error("reminderId is required");
+						const result = await remindersModule.completeReminder(reminderId);
+						return {
+							content: [{ type: "text", text: result.message }],
+							...result,
+							isError: !result.success,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return { content: [{ type: "text", text: `Error completing reminder: ${errorMessage}` }], isError: true };
+					}
+				}
+
+				case "reminders_delete": {
+					try {
+						const remindersModule = await loadModule("reminders");
+						const { reminderId } = args as { reminderId: string };
+						if (typeof reminderId !== "string" || !reminderId) throw new Error("reminderId is required");
+						const result = await remindersModule.deleteReminder(reminderId);
+						return {
+							content: [{ type: "text", text: result.message }],
+							...result,
+							isError: !result.success,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return { content: [{ type: "text", text: `Error deleting reminder: ${errorMessage}` }], isError: true };
 					}
 				}
 
@@ -1695,52 +1734,6 @@ function isMailArgs(args: unknown): args is {
 	if (limit && typeof limit !== "number") return false;
 	if (cc && typeof cc !== "string") return false;
 	if (bcc && typeof bcc !== "string") return false;
-
-	return true;
-}
-
-function isRemindersArgs(args: unknown): args is {
-	operation: "list" | "search" | "open" | "create" | "complete" | "delete";
-	searchText?: string;
-	name?: string;
-	listName?: string;
-	reminderId?: string;
-	notes?: string;
-	dueDate?: string;
-} {
-	if (typeof args !== "object" || args === null) {
-		return false;
-	}
-
-	const { operation } = args as any;
-	if (typeof operation !== "string") {
-		return false;
-	}
-
-	if (!["list", "search", "open", "create", "complete", "delete"].includes(operation)) {
-		return false;
-	}
-
-	if (
-		operation === "search" &&
-		(typeof (args as any).searchText !== "string" || (args as any).searchText === "")
-	) {
-		return false;
-	}
-
-	if (
-		operation === "create" &&
-		(typeof (args as any).name !== "string" || (args as any).name === "")
-	) {
-		return false;
-	}
-
-	if (
-		(operation === "complete" || operation === "delete") &&
-		(typeof (args as any).reminderId !== "string" || (args as any).reminderId === "")
-	) {
-		return false;
-	}
 
 	return true;
 }

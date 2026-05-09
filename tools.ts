@@ -130,45 +130,150 @@ const CONTACTS_TOOL: Tool = {
     }
   };
   
-  const REMINDERS_TOOL: Tool = {
-    name: "reminders",
-    description: "List, search, create, complete, and delete reminders in Apple Reminders app",
-    inputSchema: {
-      type: "object",
-      properties: {
-        operation: {
-          type: "string",
-          description: "Operation to perform: 'list', 'search', 'open', 'create', 'complete', or 'delete'",
-          enum: ["list", "search", "open", "create", "complete", "delete"]
-        },
-        searchText: {
-          type: "string",
-          description: "Text to search for in reminders (required for search and open operations)"
-        },
-        listName: {
-          type: "string",
-          description: "Name of the list to filter by or create the reminder in (optional)"
-        },
-        name: {
-          type: "string",
-          description: "Name of the reminder to create (required for create operation)"
-        },
-        reminderId: {
-          type: "string",
-          description: "ID of the reminder to complete or delete (required for complete and delete operations)"
-        },
-        notes: {
-          type: "string",
-          description: "Additional notes for the reminder (optional for create operation)"
-        },
-        dueDate: {
-          type: "string",
-          description: "Due date for the reminder in ISO format (optional for create operation)"
-        }
+const REMINDERS_LIST_TOOL: Tool = {
+  name: "reminders_list",
+  description: "List reminders from Apple Reminders with an optional filter and list",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filter: {
+        type: "string",
+        description: "Filter preset: today, tomorrow, week, overdue, upcoming, completed, all (optional, default all)",
+        enum: ["today", "tomorrow", "week", "overdue", "upcoming", "completed", "all"]
       },
-      required: ["operation"]
+      listName: {
+        type: "string",
+        description: "Limit results to a specific reminder list (optional)"
+      }
     }
-  };
+  }
+};
+
+const REMINDERS_SEARCH_TOOL: Tool = {
+  name: "reminders_search",
+  description: "Search reminders by text across titles and notes",
+  inputSchema: {
+    type: "object",
+    properties: {
+      searchText: {
+        type: "string",
+        description: "Text to search for in reminder titles and notes"
+      }
+    },
+    required: ["searchText"]
+  }
+};
+
+const REMINDERS_GET_LISTS_TOOL: Tool = {
+  name: "reminders_get_lists",
+  description: "List all reminder lists with their titles, IDs, and counts",
+  inputSchema: {
+    type: "object",
+    properties: {}
+  }
+};
+
+const REMINDERS_CREATE_TOOL: Tool = {
+  name: "reminders_create",
+  description: "Create a new reminder in Apple Reminders",
+  inputSchema: {
+    type: "object",
+    properties: {
+      title: {
+        type: "string",
+        description: "Title of the reminder"
+      },
+      listName: {
+        type: "string",
+        description: "List to add the reminder to (optional, defaults to Reminders)"
+      },
+      notes: {
+        type: "string",
+        description: "Notes for the reminder (optional)"
+      },
+      dueDate: {
+        type: "string",
+        description: "Due date in ISO format or natural language e.g. 'tomorrow' (optional)"
+      },
+      priority: {
+        type: "string",
+        description: "Priority of the reminder (optional)",
+        enum: ["none", "low", "medium", "high"]
+      }
+    },
+    required: ["title"]
+  }
+};
+
+const REMINDERS_EDIT_TOOL: Tool = {
+  name: "reminders_edit",
+  description: "Edit an existing reminder by ID",
+  inputSchema: {
+    type: "object",
+    properties: {
+      reminderId: {
+        type: "string",
+        description: "ID of the reminder to edit"
+      },
+      title: {
+        type: "string",
+        description: "New title (optional)"
+      },
+      listName: {
+        type: "string",
+        description: "Move reminder to this list (optional)"
+      },
+      notes: {
+        type: "string",
+        description: "New notes, pass empty string to clear (optional)"
+      },
+      dueDate: {
+        type: "string",
+        description: "New due date in ISO format or natural language (optional)"
+      },
+      priority: {
+        type: "string",
+        description: "New priority (optional)",
+        enum: ["none", "low", "medium", "high"]
+      },
+      clearDue: {
+        type: "boolean",
+        description: "Set to true to clear the due date (optional)"
+      }
+    },
+    required: ["reminderId"]
+  }
+};
+
+const REMINDERS_COMPLETE_TOOL: Tool = {
+  name: "reminders_complete",
+  description: "Mark a reminder as complete",
+  inputSchema: {
+    type: "object",
+    properties: {
+      reminderId: {
+        type: "string",
+        description: "ID of the reminder to mark complete"
+      }
+    },
+    required: ["reminderId"]
+  }
+};
+
+const REMINDERS_DELETE_TOOL: Tool = {
+  name: "reminders_delete",
+  description: "Delete a reminder permanently",
+  inputSchema: {
+    type: "object",
+    properties: {
+      reminderId: {
+        type: "string",
+        description: "ID of the reminder to delete"
+      }
+    },
+    required: ["reminderId"]
+  }
+};
   
   
 const CALENDAR_LIST_EVENTS_TOOL: Tool = {
@@ -434,6 +539,14 @@ const MAPS_TOOL: Tool = {
   }
 };
 
-const tools = [CONTACTS_TOOL, NOTES_TOOL, MESSAGES_TOOL, MAIL_TOOL, REMINDERS_TOOL, CALENDAR_LIST_EVENTS_TOOL, CALENDAR_SEARCH_EVENTS_TOOL, CALENDAR_GET_EVENT_TOOL, CALENDAR_CREATE_EVENT_TOOL, CALENDAR_UPDATE_EVENT_TOOL, CALENDAR_DELETE_EVENT_TOOL, CALENDAR_FREEBUSY_TOOL, CALENDAR_LIST_CALENDARS_TOOL, MAPS_TOOL];
+const tools = [
+  CONTACTS_TOOL, NOTES_TOOL, MESSAGES_TOOL, MAIL_TOOL,
+  REMINDERS_LIST_TOOL, REMINDERS_SEARCH_TOOL, REMINDERS_GET_LISTS_TOOL,
+  REMINDERS_CREATE_TOOL, REMINDERS_EDIT_TOOL, REMINDERS_COMPLETE_TOOL, REMINDERS_DELETE_TOOL,
+  CALENDAR_LIST_EVENTS_TOOL, CALENDAR_SEARCH_EVENTS_TOOL, CALENDAR_GET_EVENT_TOOL,
+  CALENDAR_CREATE_EVENT_TOOL, CALENDAR_UPDATE_EVENT_TOOL, CALENDAR_DELETE_EVENT_TOOL,
+  CALENDAR_FREEBUSY_TOOL, CALENDAR_LIST_CALENDARS_TOOL,
+  MAPS_TOOL,
+];
 
 export default tools;
