@@ -7,19 +7,32 @@ const execFileAsync = promisify(execFile);
 // Set REMINDCTL_PATH in the LaunchAgent EnvironmentVariables if needed.
 const REMINDCTL = process.env.REMINDCTL_PATH ?? "remindctl";
 
+export type ShowFilter =
+  | "today"
+  | "tomorrow"
+  | "week"
+  | "overdue"
+  | "upcoming"
+  | "completed"
+  | "all";
+
 interface ReminderList {
-  name: string;
   id: string;
+  title: string;
+  overdueCount: number;
+  reminderCount: number;
 }
 
 interface Reminder {
-  name: string;
   id: string;
-  body: string;
-  completed: boolean;
+  title: string;
+  notes: string | null;
+  isCompleted: boolean;
+  completionDate: string | null;
   dueDate: string | null;
+  listID: string;
   listName: string;
-  priority?: number;
+  priority: string;
 }
 
 async function runRemindctl(...args: string[]): Promise<any> {
@@ -48,64 +61,96 @@ async function runRemindctl(...args: string[]): Promise<any> {
   return JSON.parse(trimmed);
 }
 
-function mapReminder(r: any, listName = ""): Reminder {
+function mapReminder(r: any): Reminder {
   return {
     id: r.id ?? "",
-    name: r.title ?? "Untitled",
-    body: r.notes ?? "",
-    completed: r.isCompleted ?? false,
-    dueDate: r.dueDate ?? r.due ?? null,
-    listName: r.listName ?? listName,
-    priority: r.priority,
+    title: r.title ?? "Untitled",
+    notes: r.notes ?? null,
+    isCompleted: r.isCompleted ?? false,
+    completionDate: r.completionDate ?? null,
+    dueDate: r.dueDate ?? null,
+    listID: r.listID ?? "",
+    listName: r.listName ?? "",
+    priority: r.priority ?? "none",
   };
 }
 
-async function getAllLists(): Promise<ReminderList[]> {
+async function getLists(): Promise<ReminderList[]> {
   const data = await runRemindctl("list");
-  const lists: any[] = Array.isArray(data) ? data : data?.lists ?? [];
-  return lists.map((l: any) => ({ name: l.name ?? "", id: l.id ?? l.name ?? "" }));
+  const items: any[] = Array.isArray(data) ? data : [];
+  return items.map((l: any) => ({
+    id: l.id ?? "",
+    title: l.title ?? "",
+    overdueCount: l.overdueCount ?? 0,
+    reminderCount: l.reminderCount ?? 0,
+  }));
 }
 
-async function getAllReminders(listName?: string): Promise<Reminder[]> {
-  const args = ["show", "all"];
+async function showReminders(filter: ShowFilter | string = "all", listName?: string): Promise<Reminder[]> {
+  const args = ["show", filter];
   if (listName) args.push("--list", listName);
   const data = await runRemindctl(...args);
-  const items: any[] = Array.isArray(data) ? data : data?.reminders ?? [];
-  return items.map((r) => mapReminder(r, listName ?? ""));
+  const items: any[] = Array.isArray(data) ? data : [];
+  return items.map(mapReminder);
 }
 
 async function searchReminders(searchText: string): Promise<Reminder[]> {
   if (!searchText || searchText.trim() === "") return [];
-  const all = await getAllReminders();
+  const all = await showReminders("all");
   const lower = searchText.toLowerCase();
   return all.filter(
     (r) =>
-      r.name.toLowerCase().includes(lower) ||
-      (r.body && r.body.toLowerCase().includes(lower)),
+      r.title.toLowerCase().includes(lower) ||
+      (r.notes && r.notes.toLowerCase().includes(lower)),
   );
 }
 
 async function createReminder(
-  name: string,
+  title: string,
   listName = "Reminders",
   notes?: string,
   dueDate?: string,
+  priority?: "none" | "low" | "medium" | "high",
 ): Promise<Reminder> {
-  if (!name || name.trim() === "") throw new Error("Reminder name cannot be empty");
+  if (!title || title.trim() === "") throw new Error("Reminder title cannot be empty");
 
-  const args = ["add", "--title", name, "--list", listName];
+  const args = ["add", "--title", title, "--list", listName];
   if (notes) args.push("--notes", notes);
   if (dueDate) args.push("--due", dueDate);
+  if (priority) args.push("--priority", priority);
 
   const data = await runRemindctl(...args);
-  const r = data?.reminder ?? data;
-  return mapReminder(r, listName);
+  return mapReminder(data);
 }
 
-async function completeReminder(id: string): Promise<{ success: boolean; message: string }> {
+interface EditOptions {
+  title?: string;
+  listName?: string;
+  dueDate?: string;
+  notes?: string;
+  priority?: "none" | "low" | "medium" | "high";
+  clearDue?: boolean;
+}
+
+async function editReminder(id: string, options: EditOptions): Promise<Reminder> {
+  const args = ["edit", id];
+  if (options.title) args.push("--title", options.title);
+  if (options.listName) args.push("--list", options.listName);
+  if (options.dueDate) args.push("--due", options.dueDate);
+  if (options.notes !== undefined) args.push("--notes", options.notes);
+  if (options.priority) args.push("--priority", options.priority);
+  if (options.clearDue) args.push("--clear-due");
+
+  const data = await runRemindctl(...args);
+  return mapReminder(data);
+}
+
+async function completeReminder(id: string): Promise<{ success: boolean; message: string; reminder?: Reminder }> {
   try {
-    await runRemindctl("complete", id);
-    return { success: true, message: "Reminder marked as complete." };
+    const data = await runRemindctl("complete", id);
+    const items: any[] = Array.isArray(data) ? data : [];
+    const reminder = items.length > 0 ? mapReminder(items[0]) : undefined;
+    return { success: true, message: "Reminder marked as complete.", reminder };
   } catch (error) {
     return {
       success: false,
@@ -137,30 +182,40 @@ async function openReminder(
   return { success: true, message: "Reminders app opened.", reminder: matches[0] };
 }
 
-async function requestRemindersAccess(): Promise<{ hasAccess: boolean; message: string }> {
+// Compatibility aliases used by index.ts
+async function getAllLists() { return getLists(); }
+async function getAllReminders(listName?: string) { return showReminders("all", listName); }
+
+async function requestRemindersAccess(): Promise<{ hasAccess: boolean; status: string; message: string }> {
   try {
     const data = await runRemindctl("status");
-    const authorized = data?.authorized ?? data?.status === "authorized";
+    const authorized: boolean = data?.authorized === true;
+    const status: string = data?.status ?? "unknown";
     if (authorized) {
-      return { hasAccess: true, message: "Reminders access granted." };
+      return { hasAccess: true, status, message: "Reminders access granted." };
     }
     return {
       hasAccess: false,
+      status,
       message: "Reminders access not granted. Run 'remindctl authorize' to request access.",
     };
   } catch (error) {
     return {
       hasAccess: false,
+      status: "error",
       message: `Reminders access error: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
 
 export default {
+  getLists,
+  showReminders,
   getAllLists,
   getAllReminders,
   searchReminders,
   createReminder,
+  editReminder,
   completeReminder,
   deleteReminder,
   openReminder,
