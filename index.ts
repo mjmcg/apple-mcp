@@ -954,11 +954,13 @@ end tell`;
 				case "calendar_list_events": {
 					try {
 						const calendarModule = await loadModule("calendar");
-						const { limit, fromDate, toDate } = args as { limit?: number; fromDate?: string; toDate?: string };
+						const { limit, fromDate, toDate, calendarName, query } = args as { limit?: number; fromDate?: string; toDate?: string; calendarName?: string; query?: string };
 						const events = await calendarModule.getEvents(
 							limit,
 							fromDate,
 							toDate,
+							calendarName,
+							query,
 						);
 
 						const startDateText = fromDate
@@ -1000,7 +1002,7 @@ end tell`;
 				case "calendar_search_events": {
 					try {
 						const calendarModule = await loadModule("calendar");
-						const { searchText, limit, fromDate, toDate } = args as { searchText: string; limit?: number; fromDate?: string; toDate?: string };
+						const { searchText, limit, fromDate, toDate, calendarName } = args as { searchText: string; limit?: number; fromDate?: string; toDate?: string; calendarName?: string };
 						if (typeof searchText !== "string") {
 							throw new Error("searchText is required");
 						}
@@ -1009,6 +1011,7 @@ end tell`;
 							limit,
 							fromDate,
 							toDate,
+							calendarName,
 						);
 
 						return {

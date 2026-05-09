@@ -188,6 +188,14 @@ const CALENDAR_LIST_EVENTS_TOOL: Tool = {
       toDate: {
         type: "string",
         description: "End date in ISO format (optional, default is 7 days from now)"
+      },
+      calendarName: {
+        type: "string",
+        description: "Name of a specific calendar to list events from (optional, lists from all calendars if not specified)"
+      },
+      query: {
+        type: "string",
+        description: "Case-insensitive filter on event title, location, or description (optional)"
       }
     }
   }
@@ -214,6 +222,10 @@ const CALENDAR_SEARCH_EVENTS_TOOL: Tool = {
       toDate: {
         type: "string",
         description: "End date for search range in ISO format (optional, default is 30 days from now)"
+      },
+      calendarName: {
+        type: "string",
+        description: "Name of a specific calendar to search in (optional, searches all calendars if not specified)"
       }
     },
     required: ["searchText"]

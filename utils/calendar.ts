@@ -83,6 +83,8 @@ async function getEvents(
     limit = 10,
     fromDate?: string,
     toDate?: string,
+    calendarName?: string,
+    query?: string,
 ): Promise<CalendarEvent[]> {
     const effectiveLimit = limit > 0 ? limit : 10;
 
@@ -93,12 +95,14 @@ async function getEvents(
     const from = (fromDate ?? today.toISOString()).split("T")[0];
     const to = (toDate ?? defaultEnd.toISOString()).split("T")[0];
 
-    const calNames = await getCalendarNames();
+    const calNames = calendarName ? [calendarName] : await getCalendarNames();
 
     const results = await Promise.allSettled(
-        calNames.map((name) =>
-            runAccli("events", name, "--from", from, "--to", to, "--max", String(effectiveLimit))
-        )
+        calNames.map((name) => {
+            const args = ["events", name, "--from", from, "--to", to, "--max", String(effectiveLimit)];
+            if (query) args.push("--query", query);
+            return runAccli(...args);
+        })
     );
 
     const events: CalendarEvent[] = [];
@@ -122,35 +126,19 @@ async function searchEvents(
     limit = 10,
     fromDate?: string,
     toDate?: string,
+    calendarName?: string,
 ): Promise<CalendarEvent[]> {
-    const effectiveLimit = limit > 0 ? limit : 10;
-
     const today = new Date();
     const defaultEnd = new Date();
     defaultEnd.setDate(today.getDate() + 30);
 
-    const from = (fromDate ?? today.toISOString()).split("T")[0];
-    const to = (toDate ?? defaultEnd.toISOString()).split("T")[0];
-
-    const calNames = await getCalendarNames();
-
-    const results = await Promise.allSettled(
-        calNames.map((name) =>
-            runAccli("events", name, "--from", from, "--to", to, "--query", searchText, "--max", String(effectiveLimit))
-        )
+    return getEvents(
+        limit,
+        fromDate ?? today.toISOString(),
+        toDate ?? defaultEnd.toISOString(),
+        calendarName,
+        searchText,
     );
-
-    const events: CalendarEvent[] = [];
-    for (const r of results) {
-        if (r.status === "fulfilled") {
-            const list: any[] = r.value?.events ?? [];
-            events.push(...list.map(mapEvent));
-        }
-    }
-
-    return events
-        .sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""))
-        .slice(0, effectiveLimit);
 }
 
 async function createEvent(
