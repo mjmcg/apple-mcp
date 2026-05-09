@@ -951,256 +951,286 @@ end tell`;
 				}
 
 
-				case "calendar": {
-					if (!isCalendarArgs(args)) {
-						throw new Error("Invalid arguments for calendar tool");
-					}
-
+				case "calendar_list_events": {
 					try {
 						const calendarModule = await loadModule("calendar");
-						const { operation } = args;
+						const { limit, fromDate, toDate } = args as { limit?: number; fromDate?: string; toDate?: string };
+						const events = await calendarModule.getEvents(
+							limit,
+							fromDate,
+							toDate,
+						);
 
-						switch (operation) {
-							case "search": {
-								const { searchText, limit, fromDate, toDate } = args;
-								const events = await calendarModule.searchEvents(
-									searchText!,
-									limit,
-									fromDate,
-									toDate,
-								);
+						const startDateText = fromDate
+							? new Date(fromDate).toLocaleDateString()
+							: "today";
+						const endDateText = toDate
+							? new Date(toDate).toLocaleDateString()
+							: "next 7 days";
 
-								return {
-									content: [
-										{
-											type: "text",
-											text:
-												events.length > 0
-													? `Found ${events.length} events matching "${searchText}":\n\n${events
-															.map(
-																(event) =>
-																	`${event.title} (${new Date(event.startDate!).toLocaleString()} - ${new Date(event.endDate!).toLocaleString()})\n` +
-																	`Location: ${event.location || "Not specified"}\n` +
-																	`Calendar: ${event.calendarName}\n` +
-																	`ID: ${event.id}\n` +
-																	`${event.notes ? `Notes: ${event.notes}\n` : ""}`,
-															)
-															.join("\n\n")}`
-													: `No events found matching "${searchText}".`,
-										},
-									],
-									isError: false,
-								};
-							}
-
-							case "get": {
-								const { eventId, calendarName } = args;
-								const event = await calendarModule.getEvent(eventId!, calendarName);
-
-								return {
-									content: [
-										{
-											type: "text",
-											text: `${event.title} (${new Date(event.startDate!).toLocaleString()} - ${new Date(event.endDate!).toLocaleString()})\n` +
-												`Location: ${event.location || "Not specified"}\n` +
-												`Calendar: ${event.calendarName}\n` +
-												`All Day: ${event.isAllDay ? "yes" : "no"}\n` +
-												`ID: ${event.id}` +
-												(event.notes ? `\nNotes: ${event.notes}` : "") +
-												(event.url ? `\nURL: ${event.url}` : ""),
-										},
-									],
-									isError: false,
-								};
-							}
-
-							case "calendars": {
-								const calendars = await calendarModule.listCalendars();
-
-								return {
-									content: [
-										{
-											type: "text",
-											text:
-												calendars.length > 0
-													? `Found ${calendars.length} calendars:\n\n${calendars
-															.map(
-																(cal) =>
-																	`${cal.name}\n  Source: ${cal.source}\n  ID: ${cal.id}\n  Writable: ${cal.writable ? "yes" : "no"}`,
-															)
-															.join("\n\n")}`
-													: "No calendars found.",
-										},
-									],
-									isError: false,
-								};
-							}
-
-							case "list": {
-								const { limit, fromDate, toDate } = args;
-								const events = await calendarModule.getEvents(
-									limit,
-									fromDate,
-									toDate,
-								);
-
-								const startDateText = fromDate
-									? new Date(fromDate).toLocaleDateString()
-									: "today";
-								const endDateText = toDate
-									? new Date(toDate).toLocaleDateString()
-									: "next 7 days";
-
-								return {
-									content: [
-										{
-											type: "text",
-											text:
-												events.length > 0
-													? `Found ${events.length} events from ${startDateText} to ${endDateText}:\n\n${events
-															.map(
-																(event) =>
-																	`${event.title} (${new Date(event.startDate!).toLocaleString()} - ${new Date(event.endDate!).toLocaleString()})\n` +
-																	`Location: ${event.location || "Not specified"}\n` +
-																	`Calendar: ${event.calendarName}\n` +
-																	`ID: ${event.id}`,
-															)
-															.join("\n\n")}`
-													: `No events found from ${startDateText} to ${endDateText}.`,
-										},
-									],
-									isError: false,
-								};
-							}
-
-							case "create": {
-								const {
-									title,
-									startDate,
-									endDate,
-									location,
-									notes,
-									isAllDay,
-									calendarName,
-								} = args;
-								const result = await calendarModule.createEvent(
-									title!,
-									startDate!,
-									endDate!,
-									location,
-									notes,
-									isAllDay,
-									calendarName,
-								);
-								return {
-									content: [
-										{
-											type: "text",
-											text: result.success
-												? `${result.message} Event scheduled from ${new Date(startDate!).toLocaleString()} to ${new Date(endDate!).toLocaleString()}${result.eventId ? `\nEvent ID: ${result.eventId}` : ""}`
-												: `Error creating event: ${result.message}`,
-										},
-									],
-									isError: !result.success,
-								};
-							}
-
-							case "update": {
-								const {
-									eventId,
-									calendarName,
-									title,
-									startDate,
-									endDate,
-									location,
-									notes,
-									isAllDay,
-								} = args;
-								const result = await calendarModule.updateEvent(
-									eventId!,
-									calendarName!,
-									title,
-									startDate,
-									endDate,
-									location,
-									notes,
-									isAllDay,
-								);
-								return {
-									content: [
-										{
-											type: "text",
-											text: result.success
-												? result.message
-												: `Error updating event: ${result.message}`,
-										},
-									],
-									isError: !result.success,
-								};
-							}
-
-							case "delete": {
-								const { eventId, calendarName } = args;
-								const result = await calendarModule.deleteEvent(
-									eventId!,
-									calendarName!,
-								);
-								return {
-									content: [
-										{
-											type: "text",
-											text: result.success
-												? result.message
-												: `Error deleting event: ${result.message}`,
-										},
-									],
-									isError: !result.success,
-								};
-							}
-
-							case "freebusy": {
-								const { fromDate, toDate, calendarNames } = args;
-								if (!fromDate || !toDate) {
-									throw new Error("fromDate and toDate are required for freebusy operation");
-								}
-								const slots = await calendarModule.getFreeBusy(
-									fromDate,
-									toDate,
-									calendarNames,
-								);
-
-								return {
-									content: [
-										{
-											type: "text",
-											text:
-												slots.length > 0
-													? `Found ${slots.length} busy slots:\n\n${slots
-															.map(
-																(slot) =>
-																	`${new Date(slot.start).toLocaleString()} - ${new Date(slot.end).toLocaleString()}` +
-																	(slot.calendar ? ` (${slot.calendar})` : ""),
-															)
-															.join("\n")}`
-													: `No busy slots found in the specified range.`,
-										},
-									],
-									isError: false,
-								};
-							}
-
-							default:
-								throw new Error(`Unknown calendar operation: ${operation}`);
-						}
-					} catch (error) {
-						const errorMessage = error instanceof Error ? error.message : String(error);
 						return {
 							content: [
 								{
 									type: "text",
-									text: errorMessage.includes("access") ? errorMessage : `Error in calendar tool: ${errorMessage}`,
+									text:
+										events.length > 0
+											? `Found ${events.length} events from ${startDateText} to ${endDateText}:\n\n${events
+													.map(
+														(event) =>
+															`${event.title} (${new Date(event.startDate!).toLocaleString()} - ${new Date(event.endDate!).toLocaleString()})\n` +
+															`Location: ${event.location || "Not specified"}\n` +
+															`Calendar: ${event.calendarName}\n` +
+															`ID: ${event.id}`,
+													)
+													.join("\n\n")}`
+											: `No events found from ${startDateText} to ${endDateText}.`,
 								},
 							],
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
+							isError: true,
+						};
+					}
+				}
+
+				case "calendar_search_events": {
+					try {
+						const calendarModule = await loadModule("calendar");
+						const { searchText, limit, fromDate, toDate } = args as { searchText: string; limit?: number; fromDate?: string; toDate?: string };
+						if (typeof searchText !== "string") {
+							throw new Error("searchText is required");
+						}
+						const events = await calendarModule.searchEvents(
+							searchText,
+							limit,
+							fromDate,
+							toDate,
+						);
+
+						return {
+							content: [
+								{
+									type: "text",
+									text:
+										events.length > 0
+											? `Found ${events.length} events matching "${searchText}":\n\n${events
+													.map(
+														(event) =>
+															`${event.title} (${new Date(event.startDate!).toLocaleString()} - ${new Date(event.endDate!).toLocaleString()})\n` +
+															`Location: ${event.location || "Not specified"}\n` +
+															`Calendar: ${event.calendarName}\n` +
+															`ID: ${event.id}\n` +
+															`${event.notes ? `Notes: ${event.notes}\n` : ""}`,
+													)
+													.join("\n\n")}`
+											: `No events found matching "${searchText}".`,
+								},
+							],
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
+							isError: true,
+						};
+					}
+				}
+
+				case "calendar_get_event": {
+					try {
+						const calendarModule = await loadModule("calendar");
+						const { eventId, calendarName } = args as { eventId: string; calendarName?: string };
+						if (typeof eventId !== "string") {
+							throw new Error("eventId is required");
+						}
+						const event = await calendarModule.getEvent(eventId, calendarName);
+
+						return {
+							content: [
+								{
+									type: "text",
+									text: `${event.title} (${new Date(event.startDate!).toLocaleString()} - ${new Date(event.endDate!).toLocaleString()})\n` +
+										`Location: ${event.location || "Not specified"}\n` +
+										`Calendar: ${event.calendarName}\n` +
+										`All Day: ${event.isAllDay ? "yes" : "no"}\n` +
+										`ID: ${event.id}` +
+										(event.notes ? `\nNotes: ${event.notes}` : "") +
+										(event.url ? `\nURL: ${event.url}` : ""),
+								},
+							],
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
+							isError: true,
+						};
+					}
+				}
+
+				case "calendar_create_event": {
+					try {
+						const calendarModule = await loadModule("calendar");
+						const { title, startDate, endDate, location, notes, isAllDay, calendarName } = args as {
+							title: string; startDate: string; endDate: string;
+							location?: string; notes?: string; isAllDay?: boolean; calendarName?: string;
+						};
+						if (typeof title !== "string" || typeof startDate !== "string" || typeof endDate !== "string") {
+							throw new Error("title, startDate, and endDate are required");
+						}
+						const result = await calendarModule.createEvent(
+							title, startDate, endDate, location, notes, isAllDay, calendarName,
+						);
+						return {
+							content: [
+								{
+									type: "text",
+									text: result.success
+										? `${result.message} Event scheduled from ${new Date(startDate).toLocaleString()} to ${new Date(endDate).toLocaleString()}${result.eventId ? `\nEvent ID: ${result.eventId}` : ""}`
+										: `Error creating event: ${result.message}`,
+								},
+							],
+							isError: !result.success,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
+							isError: true,
+						};
+					}
+				}
+
+				case "calendar_update_event": {
+					try {
+						const calendarModule = await loadModule("calendar");
+						const { eventId, calendarName, title, startDate, endDate, location, notes, isAllDay } = args as {
+							eventId: string; calendarName: string;
+							title?: string; startDate?: string; endDate?: string;
+							location?: string; notes?: string; isAllDay?: boolean;
+						};
+						if (typeof eventId !== "string" || typeof calendarName !== "string") {
+							throw new Error("eventId and calendarName are required");
+						}
+						const result = await calendarModule.updateEvent(
+							eventId, calendarName, title, startDate, endDate, location, notes, isAllDay,
+						);
+						return {
+							content: [
+								{
+									type: "text",
+									text: result.success
+										? result.message
+										: `Error updating event: ${result.message}`,
+								},
+							],
+							isError: !result.success,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
+							isError: true,
+						};
+					}
+				}
+
+				case "calendar_delete_event": {
+					try {
+						const calendarModule = await loadModule("calendar");
+						const { eventId, calendarName } = args as { eventId: string; calendarName: string };
+						if (typeof eventId !== "string" || typeof calendarName !== "string") {
+							throw new Error("eventId and calendarName are required");
+						}
+						const result = await calendarModule.deleteEvent(eventId, calendarName);
+						return {
+							content: [
+								{
+									type: "text",
+									text: result.success
+										? result.message
+										: `Error deleting event: ${result.message}`,
+								},
+							],
+							isError: !result.success,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
+							isError: true,
+						};
+					}
+				}
+
+				case "calendar_freebusy": {
+					try {
+						const calendarModule = await loadModule("calendar");
+						const { fromDate, toDate, calendarNames } = args as { fromDate: string; toDate: string; calendarNames?: string[] };
+						if (typeof fromDate !== "string" || typeof toDate !== "string") {
+							throw new Error("fromDate and toDate are required");
+						}
+						const slots = await calendarModule.getFreeBusy(fromDate, toDate, calendarNames);
+
+						return {
+							content: [
+								{
+									type: "text",
+									text:
+										slots.length > 0
+											? `Found ${slots.length} busy slots:\n\n${slots
+													.map(
+														(slot) =>
+															`${new Date(slot.start).toLocaleString()} - ${new Date(slot.end).toLocaleString()}` +
+															(slot.calendar ? ` (${slot.calendar})` : ""),
+													)
+													.join("\n")}`
+											: `No busy slots found in the specified range.`,
+								},
+							],
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
+							isError: true,
+						};
+					}
+				}
+
+				case "calendar_list_calendars": {
+					try {
+						const calendarModule = await loadModule("calendar");
+						const calendars = await calendarModule.listCalendars();
+
+						return {
+							content: [
+								{
+									type: "text",
+									text:
+										calendars.length > 0
+											? `Found ${calendars.length} calendars:\n\n${calendars
+													.map(
+														(cal) =>
+															`${cal.name}\n  Source: ${cal.source}\n  ID: ${cal.id}\n  Writable: ${cal.writable ? "yes" : "no"}`,
+													)
+													.join("\n\n")}`
+											: "No calendars found.",
+								},
+							],
+							isError: false,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text", text: `Error in calendar tool: ${errorMessage}` }],
 							isError: true,
 						};
 					}
@@ -1712,90 +1742,6 @@ function isRemindersArgs(args: unknown): args is {
 	return true;
 }
 
-
-function isCalendarArgs(args: unknown): args is {
-	operation: "search" | "get" | "list" | "create" | "update" | "delete" | "freebusy" | "calendars";
-	searchText?: string;
-	eventId?: string;
-	limit?: number;
-	fromDate?: string;
-	toDate?: string;
-	title?: string;
-	startDate?: string;
-	endDate?: string;
-	location?: string;
-	notes?: string;
-	isAllDay?: boolean;
-	calendarName?: string;
-	calendarNames?: string[];
-} {
-	if (typeof args !== "object" || args === null) {
-		return false;
-	}
-
-	const { operation } = args as { operation?: unknown };
-	if (typeof operation !== "string") {
-		return false;
-	}
-
-	if (!["search", "get", "list", "create", "update", "delete", "freebusy", "calendars"].includes(operation)) {
-		return false;
-	}
-
-	// Check that required parameters are present for each operation
-	if (operation === "search") {
-		const { searchText } = args as { searchText?: unknown };
-		if (typeof searchText !== "string") {
-			return false;
-		}
-	}
-
-	if (operation === "get") {
-		const { eventId } = args as { eventId?: unknown };
-		if (typeof eventId !== "string") {
-			return false;
-		}
-	}
-
-	if (operation === "update") {
-		const { eventId, calendarName } = args as { eventId?: unknown; calendarName?: unknown };
-		if (typeof eventId !== "string" || typeof calendarName !== "string") {
-			return false;
-		}
-	}
-
-	if (operation === "delete") {
-		const { eventId, calendarName } = args as { eventId?: unknown; calendarName?: unknown };
-		if (typeof eventId !== "string" || typeof calendarName !== "string") {
-			return false;
-		}
-	}
-
-	if (operation === "freebusy") {
-		const { fromDate, toDate } = args as { fromDate?: unknown; toDate?: unknown };
-		if (typeof fromDate !== "string" || typeof toDate !== "string") {
-			return false;
-		}
-	}
-
-	if (operation === "create") {
-		const { title, startDate, endDate } = args as {
-			title?: unknown;
-			startDate?: unknown;
-			endDate?: unknown;
-		};
-
-		if (
-			typeof title !== "string" ||
-			typeof startDate !== "string" ||
-			typeof endDate !== "string"
-		) {
-			return false;
-		}
-	}
-
-	return true;
-}
 
 function isMapsArgs(args: unknown): args is {
 	operation:
