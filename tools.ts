@@ -138,12 +138,12 @@ const REMINDERS_LIST_TOOL: Tool = {
     properties: {
       filter: {
         type: "string",
-        description: "Filter preset: today, tomorrow, week, overdue, upcoming, completed, all (optional, default all)",
+        description: "Filter preset when no listName is given: today, tomorrow, week, overdue, upcoming, completed, all (optional, default upcoming). Ignored when listName is provided.",
         enum: ["today", "tomorrow", "week", "overdue", "upcoming", "completed", "all"]
       },
       listName: {
         type: "string",
-        description: "Limit results to a specific reminder list (optional)"
+        description: "Return all reminders in a specific list (optional). When set, filter is ignored and all items including completed are returned."
       }
     }
   }

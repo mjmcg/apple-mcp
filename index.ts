@@ -841,7 +841,7 @@ end tell`;
 					try {
 						const remindersModule = await loadModule("reminders");
 						const { filter, listName } = args as { filter?: string; listName?: string };
-						const reminders = await remindersModule.showReminders(filter ?? "all", listName);
+						const reminders = await remindersModule.showReminders(filter ?? "upcoming", listName);
 						return {
 							content: [{
 								type: "text",

@@ -87,9 +87,10 @@ async function getLists(): Promise<ReminderList[]> {
   }));
 }
 
-async function showReminders(filter: ShowFilter | string = "all", listName?: string): Promise<Reminder[]> {
-  const args = ["show", filter];
-  if (listName) args.push("--list", listName);
+async function showReminders(filter: ShowFilter | string = "upcoming", listName?: string): Promise<Reminder[]> {
+  // `remindctl show all --list <name>` is broken — it ignores the list filter.
+  // Use `remindctl list <name>` for list-scoped queries instead.
+  const args = listName ? ["list", listName] : ["show", filter];
   const data = await runRemindctl(...args);
   const items: any[] = Array.isArray(data) ? data : [];
   return items.map(mapReminder);
