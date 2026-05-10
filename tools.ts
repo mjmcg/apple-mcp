@@ -166,7 +166,7 @@ const REMINDERS_SEARCH_TOOL: Tool = {
 
 const REMINDERS_GET_LISTS_TOOL: Tool = {
   name: "reminders_get_lists",
-  description: "List all reminder lists with their titles, IDs, and counts",
+  description: "List all reminder lists with their titles, IDs, and counts. reminderCount reflects active (incomplete) reminders only.",
   inputSchema: {
     type: "object",
     properties: {}
