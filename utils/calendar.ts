@@ -30,7 +30,7 @@ async function runAccli(...args: string[]): Promise<any> {
     let stdout = "";
     let stderr = "";
     try {
-        const result = await execFileAsync(ACCLI, [...args, "--json"], { timeout: 15000 });
+        const result = await execFileAsync(ACCLI, [...args, "--json"], { timeout: 15000, maxBuffer: 50 * 1024 * 1024 });
         stdout = result.stdout;
         stderr = result.stderr;
     } catch (err: any) {

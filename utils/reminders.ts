@@ -42,6 +42,7 @@ async function runRemindctl(...args: string[]): Promise<any> {
     // --no-input prevents interactive prompts when running under launchd
     const result = await execFileAsync(REMINDCTL, [...args, "--json", "--no-input"], {
       timeout: 15000,
+      maxBuffer: 50 * 1024 * 1024, // 50 MB — default 1 MB is too small for large reminder libraries
     });
     stdout = result.stdout;
     stderr = result.stderr;
